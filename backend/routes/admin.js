@@ -1,10 +1,63 @@
 const express = require('express');
+const fs = require('fs');
+const path = require('path');
+const multer = require('multer');
 const pool = require('../models/db');
 const authMiddleware = require('../middleware/auth');
 const isAdmin = require('../middleware/isAdmin');
 
 const router = express.Router();
 router.use(authMiddleware, isAdmin);
+
+const UPLOAD_DIR = path.join(__dirname, '..', 'uploads');
+const MAX_VIDEO_SIZE = 100 * 1024 * 1024; // 100MB
+const MAX_STANDARD_SIZE = 20 * 1024 * 1024; // 20MB
+const ALLOWED_EXTENSIONS = new Set([
+  '.jpg', '.jpeg', '.png', '.webp', '.gif',
+  '.pdf',
+  '.doc', '.docx', '.ppt', '.pptx',
+  '.mp4', '.webm', '.mov'
+]);
+const VIDEO_EXTENSIONS = new Set(['.mp4', '.webm', '.mov']);
+
+if (!fs.existsSync(UPLOAD_DIR)) {
+  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, UPLOAD_DIR),
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    const baseName = path.basename(file.originalname || 'archivo', ext)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 80) || 'archivo';
+    cb(null, `${Date.now()}-${baseName}${ext}`);
+  }
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: MAX_VIDEO_SIZE },
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    if (!ALLOWED_EXTENSIONS.has(ext)) {
+      return cb(new Error('Tipo de archivo no permitido'));
+    }
+    return cb(null, true);
+  }
+});
+
+const uploadSingle = (req, res, next) => {
+  upload.single('file')(req, res, err => {
+    if (!err) return next();
+    if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ error: 'El archivo excede el máximo permitido (100MB para video).' });
+    }
+    return res.status(400).json({ error: err.message || 'Error al subir archivo' });
+  });
+};
 
 // Estadísticas generales
 router.get('/stats', async (req, res) => {
@@ -75,6 +128,33 @@ router.get('/certificates', async (req, res) => {
     `);
     res.json(rows);
   } catch { res.status(500).json({ error: 'Error del servidor' }); }
+});
+
+// Subida de archivos para contenidos del curso (admin)
+router.post('/upload', uploadSingle, async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No se recibió ningún archivo' });
+
+    const ext = path.extname(req.file.originalname || '').toLowerCase();
+    const isVideo = VIDEO_EXTENSIONS.has(ext);
+
+    if (!isVideo && req.file.size > MAX_STANDARD_SIZE) {
+      fs.unlink(req.file.path, () => {});
+      return res.status(400).json({ error: 'El archivo excede 20MB. Para videos el límite es 100MB.' });
+    }
+
+    const publicUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+
+    return res.status(201).json({
+      url: publicUrl,
+      filename: req.file.filename,
+      originalname: req.file.originalname,
+      mimetype: req.file.mimetype,
+      size: req.file.size
+    });
+  } catch {
+    return res.status(500).json({ error: 'Error al procesar la subida del archivo' });
+  }
 });
 
 module.exports = router;

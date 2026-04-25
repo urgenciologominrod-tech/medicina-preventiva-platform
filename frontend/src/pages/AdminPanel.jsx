@@ -144,6 +144,14 @@ function AdminUsers({ users, setUsers }) {
 }
 
 function AdminCourses({ courses, setCourses }) {
+  const FILE_ACCEPT_BY_TYPE = {
+    video: '.mp4,.webm,.mov,video/mp4,video/webm,video/quicktime',
+    image: '.jpg,.jpeg,.png,.webp,.gif,image/*',
+    infographic: '.jpg,.jpeg,.png,.webp,.gif,image/*',
+    pdf: '.pdf,application/pdf',
+    document: '.doc,.docx,.ppt,.pptx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  };
+
   const [form, setForm] = useState({ title:'', description:'', category:'', is_mandatory: false, thumbnail_url:'' });
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
@@ -166,13 +174,50 @@ function AdminCourses({ courses, setCourses }) {
   };
 
   const [addContent, setAddContent] = useState(null);
-  const [contentForm, setContentForm] = useState({ type:'video', title:'', url:'', order_index: 0 });
+  const [contentForm, setContentForm] = useState({ type:'youtube', title:'', url:'', order_index: 0 });
+  const [contentMode, setContentMode] = useState('url');
+  const [contentFile, setContentFile] = useState(null);
+  const [uploadingFile, setUploadingFile] = useState(false);
+
+  const isUrlPreferredType = ['youtube', 'link'].includes(contentForm.type);
 
   const submitContent = async e => {
     e.preventDefault();
-    await api.post(`/courses/${addContent}/content`, contentForm);
-    setAddContent(null);
-    setMsg('Contenido agregado correctamente');
+    setMsg('');
+
+    try {
+      const payload = { ...contentForm };
+
+      if (contentMode === 'file') {
+        if (isUrlPreferredType) {
+          setMsg(`El tipo "${contentForm.type}" debe registrarse usando URL.`);
+          return;
+        }
+        if (!contentFile) {
+          setMsg('Selecciona un archivo para subir.');
+          return;
+        }
+
+        setUploadingFile(true);
+        const formData = new FormData();
+        formData.append('file', contentFile);
+        const { data: uploadData } = await api.post('/admin/upload', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        payload.url = uploadData.url;
+      }
+
+      await api.post(`/courses/${addContent}/content`, payload);
+      setAddContent(null);
+      setContentMode('url');
+      setContentFile(null);
+      setContentForm({ type:'youtube', title:'', url:'', order_index: 0 });
+      setMsg('Contenido agregado correctamente');
+    } catch (err) {
+      setMsg(err.response?.data?.error || 'Error al agregar contenido');
+    } finally {
+      setUploadingFile(false);
+    }
   };
 
   return (
@@ -232,9 +277,21 @@ function AdminCourses({ courses, setCourses }) {
             <form onSubmit={submitContent} className="space-y-3">
               <div>
                 <label className="label">Tipo</label>
-                <select className="input" value={contentForm.type} onChange={e => setContentForm(p=>({...p,type:e.target.value}))}>
-                  <option value="video">Video</option>
+                <select className="input" value={contentForm.type} onChange={e => {
+                  const newType = e.target.value;
+                  setContentForm(p => ({ ...p, type: newType }));
+                  if (['youtube', 'link'].includes(newType)) {
+                    setContentMode('url');
+                    setContentFile(null);
+                  }
+                }}>
+                  <option value="youtube">YouTube</option>
+                  <option value="video">Video directo (mp4/webm)</option>
+                  <option value="image">Imagen</option>
                   <option value="infographic">Infografía</option>
+                  <option value="pdf">PDF</option>
+                  <option value="document">Documento</option>
+                  <option value="link">Link</option>
                 </select>
               </div>
               <div>
@@ -242,17 +299,78 @@ function AdminCourses({ courses, setCourses }) {
                 <input className="input" value={contentForm.title} onChange={e => setContentForm(p=>({...p,title:e.target.value}))} />
               </div>
               <div>
-                <label className="label">URL del {contentForm.type === 'video' ? 'video' : 'imagen'} (Cloudinary/directo)</label>
-                <input className="input" type="url" required value={contentForm.url} onChange={e => setContentForm(p=>({...p,url:e.target.value}))} />
+                <label className="label">Fuente del contenido</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    className={`btn-secondary text-sm ${contentMode === 'url' ? 'ring-2 ring-sky-300' : ''}`}
+                    onClick={() => setContentMode('url')}
+                  >
+                    Pegar URL
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn-secondary text-sm ${contentMode === 'file' ? 'ring-2 ring-sky-300' : ''}`}
+                    onClick={() => !isUrlPreferredType && setContentMode('file')}
+                    disabled={isUrlPreferredType}
+                    title={isUrlPreferredType ? 'Para este tipo usa URL' : 'Subir archivo local'}
+                  >
+                    Subir archivo
+                  </button>
+                </div>
+                {isUrlPreferredType && (
+                  <p className="text-xs text-amber-600 mt-1">
+                    Para tipo {contentForm.type.toUpperCase()} se recomienda usar URL.
+                  </p>
+                )}
+              </div>
+              <div>
+                <label className="label">
+                  URL del recurso
+                  {contentForm.type === 'youtube' && ' (YouTube: watch, youtu.be, embed o shorts)'}
+                  {contentForm.type === 'video' && ' (video directo: .mp4/.webm)'}
+                </label>
+                {contentMode === 'url' ? (
+                  <input
+                    className="input"
+                    type="url"
+                    required
+                    value={contentForm.url}
+                    onChange={e => setContentForm(p=>({...p,url:e.target.value}))}
+                  />
+                ) : (
+                  <>
+                    <input
+                      className="input"
+                      type="file"
+                      required
+                      accept={FILE_ACCEPT_BY_TYPE[contentForm.type] || '*/*'}
+                      onChange={e => {
+                        const file = e.target.files?.[0] || null;
+                        setContentFile(file);
+                      }}
+                    />
+                    <p className="text-xs text-slate-500 mt-1">
+                      {contentFile ? `Archivo seleccionado: ${contentFile.name}` : 'Selecciona un archivo desde tu equipo.'}
+                    </p>
+                  </>
+                )}
               </div>
               <div>
                 <label className="label">Orden</label>
                 <input className="input" type="number" min="0" value={contentForm.order_index} onChange={e => setContentForm(p=>({...p,order_index:parseInt(e.target.value)}))} />
               </div>
               <div className="flex gap-2">
-                <button type="submit" className="btn-primary flex-1">Agregar</button>
-                <button type="button" onClick={() => setAddContent(null)} className="btn-secondary flex-1">Cancelar</button>
+                <button type="submit" className="btn-primary flex-1" disabled={uploadingFile}>
+                  {uploadingFile ? 'Subiendo archivo...' : 'Agregar'}
+                </button>
+                <button type="button" onClick={() => {
+                  setAddContent(null);
+                  setContentMode('url');
+                  setContentFile(null);
+                }} className="btn-secondary flex-1">Cancelar</button>
               </div>
+              {msg && <p className={`text-xs ${msg.includes('correctamente') ? 'text-green-600' : 'text-red-600'}`}>{msg}</p>}
             </form>
           </div>
         </div>
