@@ -1,6 +1,8 @@
 require('dotenv').config({ path: './.env' });
 const express = require('express');
 const cors = require('cors');
+const fs = require('fs');
+const path = require('path');
 
 const authRoutes = require('./routes/auth');
 const coursesRoutes = require('./routes/courses');
@@ -10,10 +12,17 @@ const calendarRoutes = require('./routes/calendar');
 const competencyRoutes = require('./routes/competency');
 const adminRoutes = require('./routes/admin');
 
+
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
 const app = express();
 
 app.use(cors({ origin: process.env.FRONTEND_URL || '*' }));
 app.use(express.json());
+app.use('/uploads', express.static(uploadsDir));
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
