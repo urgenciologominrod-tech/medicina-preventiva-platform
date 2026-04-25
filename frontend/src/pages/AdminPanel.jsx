@@ -166,7 +166,7 @@ function AdminCourses({ courses, setCourses }) {
   };
 
   const [addContent, setAddContent] = useState(null);
-  const [contentForm, setContentForm] = useState({ type:'video', title:'', url:'', order_index: 0 });
+  const [contentForm, setContentForm] = useState({ type:'youtube', title:'', url:'', order_index: 0 });
 
   const submitContent = async e => {
     e.preventDefault();
@@ -233,8 +233,13 @@ function AdminCourses({ courses, setCourses }) {
               <div>
                 <label className="label">Tipo</label>
                 <select className="input" value={contentForm.type} onChange={e => setContentForm(p=>({...p,type:e.target.value}))}>
-                  <option value="video">Video</option>
+                  <option value="youtube">YouTube</option>
+                  <option value="video">Video directo (mp4/webm)</option>
+                  <option value="image">Imagen</option>
                   <option value="infographic">Infografía</option>
+                  <option value="pdf">PDF</option>
+                  <option value="document">Documento</option>
+                  <option value="link">Link</option>
                 </select>
               </div>
               <div>
@@ -242,7 +247,11 @@ function AdminCourses({ courses, setCourses }) {
                 <input className="input" value={contentForm.title} onChange={e => setContentForm(p=>({...p,title:e.target.value}))} />
               </div>
               <div>
-                <label className="label">URL del {contentForm.type === 'video' ? 'video' : 'imagen'} (Cloudinary/directo)</label>
+                <label className="label">
+                  URL del recurso
+                  {contentForm.type === 'youtube' && ' (YouTube: watch, youtu.be, embed o shorts)'}
+                  {contentForm.type === 'video' && ' (video directo: .mp4/.webm)'}
+                </label>
                 <input className="input" type="url" required value={contentForm.url} onChange={e => setContentForm(p=>({...p,url:e.target.value}))} />
               </div>
               <div>
