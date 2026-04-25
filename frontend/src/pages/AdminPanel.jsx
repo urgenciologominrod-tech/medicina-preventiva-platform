@@ -167,12 +167,49 @@ function AdminCourses({ courses, setCourses }) {
 
   const [addContent, setAddContent] = useState(null);
   const [contentForm, setContentForm] = useState({ type:'youtube', title:'', url:'', order_index: 0 });
+  const [resourceMode, setResourceMode] = useState('url');
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const [contentError, setContentError] = useState('');
 
   const submitContent = async e => {
     e.preventDefault();
-    await api.post(`/courses/${addContent}/content`, contentForm);
-    setAddContent(null);
-    setMsg('Contenido agregado correctamente');
+    setContentError('');
+
+    try {
+      let finalUrl = contentForm.url;
+
+      if (resourceMode === 'file') {
+        if (!selectedFile) {
+          setContentError('Selecciona un archivo para continuar.');
+          return;
+        }
+
+        setUploadingFile(true);
+        const formData = new FormData();
+        formData.append('file', selectedFile);
+        const uploadResponse = await api.post('/admin/upload', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        finalUrl = uploadResponse.data.url;
+      }
+
+      if (!finalUrl) {
+        setContentError('Debes proporcionar una URL o subir un archivo válido.');
+        return;
+      }
+
+      await api.post(`/courses/${addContent}/content`, { ...contentForm, url: finalUrl });
+      setAddContent(null);
+      setSelectedFile(null);
+      setContentForm({ type:'youtube', title:'', url:'', order_index: 0 });
+      setResourceMode('url');
+      setMsg('Contenido agregado correctamente');
+    } catch (err) {
+      setContentError(err.response?.data?.error || 'No se pudo agregar el contenido');
+    } finally {
+      setUploadingFile(false);
+    }
   };
 
   return (
@@ -247,20 +284,62 @@ function AdminCourses({ courses, setCourses }) {
                 <input className="input" value={contentForm.title} onChange={e => setContentForm(p=>({...p,title:e.target.value}))} />
               </div>
               <div>
-                <label className="label">
-                  URL del recurso
-                  {contentForm.type === 'youtube' && ' (YouTube: watch, youtu.be, embed o shorts)'}
-                  {contentForm.type === 'video' && ' (video directo: .mp4/.webm)'}
-                </label>
-                <input className="input" type="url" required value={contentForm.url} onChange={e => setContentForm(p=>({...p,url:e.target.value}))} />
+                <label className="label">Origen del recurso</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setResourceMode('url')}
+                    className={`text-sm rounded-lg border px-3 py-2 ${resourceMode === 'url' ? 'border-sky-500 text-sky-600 bg-sky-50' : 'border-slate-200 text-slate-600'}`}
+                  >
+                    Pegar URL
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setResourceMode('file')}
+                    className={`text-sm rounded-lg border px-3 py-2 ${resourceMode === 'file' ? 'border-sky-500 text-sky-600 bg-sky-50' : 'border-slate-200 text-slate-600'}`}
+                  >
+                    Subir archivo
+                  </button>
+                </div>
               </div>
+
+              {resourceMode === 'url' ? (
+                <div>
+                  <label className="label">
+                    URL del recurso
+                    {contentForm.type === 'youtube' && ' (YouTube: watch, youtu.be, embed o shorts)'}
+                    {contentForm.type === 'video' && ' (video directo: .mp4/.webm)'}
+                  </label>
+                  <input className="input" type="url" required value={contentForm.url} onChange={e => setContentForm(p=>({...p,url:e.target.value}))} />
+                </div>
+              ) : (
+                <div>
+                  <label className="label">Archivo desde escritorio</label>
+                  <input
+                    className="input"
+                    type="file"
+                    onChange={e => {
+                      setSelectedFile(e.target.files?.[0] || null);
+                      setContentError('');
+                    }}
+                    required
+                  />
+                </div>
+              )}
+
+              {(contentForm.type === 'youtube' || contentForm.type === 'link') && resourceMode === 'file' && (
+                <p className="text-xs text-amber-600">Sugerencia: para contenidos de tipo {contentForm.type}, se recomienda usar “Pegar URL”.</p>
+              )}
+
+              {uploadingFile && <p className="text-xs text-sky-600">Subiendo archivo...</p>}
+              {contentError && <p className="text-xs text-red-600">{contentError}</p>}
               <div>
                 <label className="label">Orden</label>
                 <input className="input" type="number" min="0" value={contentForm.order_index} onChange={e => setContentForm(p=>({...p,order_index:parseInt(e.target.value)}))} />
               </div>
               <div className="flex gap-2">
-                <button type="submit" className="btn-primary flex-1">Agregar</button>
-                <button type="button" onClick={() => setAddContent(null)} className="btn-secondary flex-1">Cancelar</button>
+                <button type="submit" disabled={uploadingFile} className="btn-primary flex-1 disabled:opacity-60">{uploadingFile ? 'Subiendo archivo...' : 'Agregar'}</button>
+                <button type="button" onClick={() => { setAddContent(null); setContentError(''); setSelectedFile(null); setResourceMode('url'); }} className="btn-secondary flex-1">Cancelar</button>
               </div>
             </form>
           </div>
