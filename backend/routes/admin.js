@@ -118,18 +118,41 @@ router.get('/certificates', async (req, res) => {
 
 // Subida de archivos para contenidos
 router.post('/upload', (req, res) => {
+  console.log('UPLOAD HIT');
   upload.single('file')(req, res, async (error) => {
     try {
       if (error) {
         if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') {
-          return res.status(400).json({ error: 'El archivo excede el límite permitido de 100 MB' });
+          return res.status(400).json({
+            error: 'El archivo excede el límite permitido de 100 MB',
+            code: 'LIMIT_FILE_SIZE',
+            detail: 'Reduce el tamaño del archivo e intenta nuevamente.'
+          });
         }
 
-        return res.status(400).json({ error: error.message || 'Archivo inválido' });
+        if (error instanceof multer.MulterError && error.code === 'LIMIT_UNEXPECTED_FILE') {
+          return res.status(400).json({
+            error: 'Campo de archivo inválido',
+            code: 'LIMIT_UNEXPECTED_FILE',
+            detail: 'El backend espera el campo "file" en FormData.'
+          });
+        }
+
+        return res.status(400).json({
+          error: error.message || 'Archivo inválido',
+          code: error.code || 'UPLOAD_ERROR',
+          detail: 'Verifica el tipo de archivo permitido e intenta de nuevo.'
+        });
       }
 
+      console.log(req.file ? req.file.originalname : 'NO FILE');
+
       if (!req.file) {
-        return res.status(400).json({ error: 'No se recibió archivo' });
+        return res.status(400).json({
+          error: 'No se recibió archivo',
+          code: 'FILE_MISSING',
+          detail: 'Adjunta un archivo en el campo "file".'
+        });
       }
 
       const ext = path.extname(req.file.originalname).toLowerCase();
@@ -141,7 +164,11 @@ router.post('/upload', (req, res) => {
         return res.status(400).json({
           error: isVideo
             ? 'El video excede el límite de 100 MB'
-            : 'El archivo excede el límite de 20 MB'
+            : 'El archivo excede el límite de 20 MB',
+          code: 'FILE_SIZE_POLICY',
+          detail: isVideo
+            ? 'Selecciona un video menor a 100 MB.'
+            : 'Selecciona un archivo menor a 20 MB para este tipo de recurso.'
         });
       }
 
@@ -156,7 +183,11 @@ router.post('/upload', (req, res) => {
       });
     } catch (err) {
       console.error('Error en /admin/upload:', err);
-      return res.status(500).json({ error: 'No se pudo subir el archivo' });
+      return res.status(500).json({
+        error: 'No se pudo subir el archivo',
+        code: 'UPLOAD_INTERNAL_ERROR',
+        detail: 'Ocurrió un error inesperado en el servidor al procesar la subida.'
+      });
     }
   });
 });
