@@ -54,12 +54,21 @@ router.post('/course/:courseId/submit', async (req, res) => {
       );
       if (!existing.rows[0]) {
         const course = await pool.query('SELECT title FROM courses WHERE id=$1', [req.params.courseId]);
-        const folio = `MP-${Date.now()}-${Math.random().toString(36).substr(2,5).toUpperCase()}`;
+        const now = new Date();
+        const year = now.getFullYear();
+        const yearlyCount = await pool.query(
+          "SELECT COUNT(*)::int AS total FROM certificates WHERE EXTRACT(YEAR FROM issued_at) = $1",
+          [year]
+        );
+        const serial = String((yearlyCount.rows[0]?.total || 0) + 1).padStart(3, '0');
+        const folio = `REMEINIA-ACAD-${year}-${serial}`;
         const pdfBuffer = await generateCertificate({
           userName: req.user.name,
           courseName: course.rows[0]?.title,
           folio,
-          date: new Date().toLocaleDateString('es-MX', { year:'numeric', month:'long', day:'numeric' })
+          date: now.toLocaleDateString('es-MX', { year:'numeric', month:'long', day:'numeric' }),
+          score,
+          hours: null
         });
         const pdfBase64 = pdfBuffer.toString('base64');
         const { rows } = await pool.query(
