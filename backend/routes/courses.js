@@ -6,6 +6,8 @@ const isAdmin = require('../middleware/isAdmin');
 const router = express.Router();
 router.use(authMiddleware);
 
+const ALLOWED_CONTENT_TYPES = new Set(['youtube', 'video', 'image', 'infographic', 'pdf', 'document', 'link']);
+
 // Listar cursos con progreso del usuario
 router.get('/', async (req, res) => {
   try {
@@ -69,13 +71,30 @@ router.post('/', isAdmin, async (req, res) => {
 // Agregar contenido al curso (admin)
 router.post('/:id/content', isAdmin, async (req, res) => {
   const { type, title, url, order_index } = req.body;
+  console.log('CREATE CONTENT', { type, title, url });
+
+  if (!ALLOWED_CONTENT_TYPES.has(type)) {
+    return res.status(400).json({
+      error: 'Tipo de contenido no permitido',
+      code: 'INVALID_CONTENT_TYPE',
+      detail: `Tipos permitidos: ${Array.from(ALLOWED_CONTENT_TYPES).join(', ')}`
+    });
+  }
+
   try {
     const { rows } = await pool.query(
       'INSERT INTO course_content(course_id,type,title,url,order_index) VALUES($1,$2,$3,$4,$5) RETURNING *',
       [req.params.id, type, title, url, order_index || 0]
     );
     res.status(201).json(rows[0]);
-  } catch { res.status(500).json({ error: 'Error del servidor' }); }
+  } catch (err) {
+    console.error('Error creando contenido:', err);
+    res.status(500).json({
+      error: 'No se pudo guardar el contenido del curso',
+      code: 'CONTENT_INSERT_FAILED',
+      detail: err.detail || err.message || 'Error al insertar en base de datos'
+    });
+  }
 });
 
 // Editar curso (admin)
