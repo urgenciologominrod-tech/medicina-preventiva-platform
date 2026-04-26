@@ -9,11 +9,14 @@ export default function Certificate() {
     api.get('/certificates/my').then(r => setCerts(r.data)).finally(() => setLoading(false));
   }, []);
 
-  const downloadPDF = (cert) => {
+  const downloadPDF = async (cert) => {
+    const response = await api.get(`/certificates/${cert.id}/download`, { responseType: 'blob' });
+    const blobUrl = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
     const link = document.createElement('a');
-    link.href = cert.pdf_url;
+    link.href = blobUrl;
     link.download = `Constancia-${cert.folio}.pdf`;
     link.click();
+    window.URL.revokeObjectURL(blobUrl);
   };
 
   if (loading) return <div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-500" /></div>;
