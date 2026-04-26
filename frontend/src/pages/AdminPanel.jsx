@@ -26,14 +26,14 @@ export default function AdminPanel() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold text-slate-800 mb-6">⚙️ Panel de Administración</h1>
+      <h1 className="text-3xl font-bold tracking-tight text-slate-900 mb-6">Panel de Administración</h1>
 
       {/* Tabs */}
       <div className="flex gap-1 flex-wrap mb-6 border-b border-slate-200">
         {TABS.map(t => (
           <button key={t} onClick={() => setTab(t)}
             className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors -mb-px border-b-2
-              ${tab === t ? 'border-sky-500 text-sky-600 bg-sky-50' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
+              ${tab === t ? 'border-cyan-500 text-cyan-700 bg-cyan-50 rounded-t-xl' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
             {t}
           </button>
         ))}
@@ -95,7 +95,7 @@ function AdminUsers({ users, setUsers }) {
 
   return (
     <div className="grid lg:grid-cols-3 gap-6">
-      <div className="card">
+      <div className="card-premium">
         <h2 className="font-semibold text-slate-700 mb-4">Registrar usuario</h2>
         <form onSubmit={submit} className="space-y-3">
           {[['name','Nombre completo','text'],['email','Correo electrónico','email'],['password','Contraseña','password'],['department','Departamento','text']].map(([f,l,t]) => (
@@ -216,7 +216,7 @@ function AdminCourses({ courses, setCourses }) {
 
   return (
     <div className="space-y-6">
-      <div className="card">
+      <div className="card-premium">
         <h2 className="font-semibold text-slate-700 mb-4">Crear curso</h2>
         <form onSubmit={submit} className="grid md:grid-cols-2 gap-4">
           <div>
@@ -246,7 +246,7 @@ function AdminCourses({ courses, setCourses }) {
         </form>
       </div>
 
-      <div className="card overflow-hidden p-0">
+      <div className="card-premium overflow-hidden p-0">
         <div className="px-6 py-4 border-b border-slate-100 font-semibold text-slate-700">Cursos ({courses.length})</div>
         <div className="divide-y divide-slate-100">
           {courses.map(c => (
@@ -265,9 +265,9 @@ function AdminCourses({ courses, setCourses }) {
       </div>
 
       {addContent && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
-            <h3 className="font-semibold text-slate-700 mb-4">Agregar contenido</h3>
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 border border-slate-200">
+            <h3 className="text-lg font-semibold text-slate-800 mb-4">Agregar contenido</h3>
             <form onSubmit={submitContent} className="space-y-3">
               <div>
                 <label className="label">Tipo</label>
@@ -389,11 +389,11 @@ function AdminExams({ courses }) {
     setQuestions(prev => prev.filter(q => q.id !== id));
   };
 
-  if (!courses) return <div className="card"><p className="text-slate-400">Cargando cursos...</p></div>;
+  if (!courses) return <div className="card-premium"><p className="text-slate-400">Cargando cursos...</p></div>;
 
   return (
     <div className="space-y-6">
-      <div className="card">
+      <div className="card-premium">
         <label className="label">Seleccionar curso</label>
         <select className="input max-w-sm" value={selectedCourse} onChange={e => loadExam(e.target.value)}>
           <option value="">— Selecciona un curso —</option>
@@ -402,7 +402,7 @@ function AdminExams({ courses }) {
       </div>
 
       {selectedCourse && !exam && (
-        <div className="card">
+        <div className="card-premium">
           <h3 className="font-semibold text-slate-700 mb-4">Crear examen para este curso</h3>
           <div className="flex gap-4 flex-wrap items-end">
             <div>
@@ -423,13 +423,13 @@ function AdminExams({ courses }) {
 
       {exam && (
         <>
-          <div className="card bg-sky-50 border-sky-200 flex flex-wrap gap-4 items-center">
+          <div className="card-premium bg-sky-50 border-sky-200 flex flex-wrap gap-4 items-center">
             <div><span className="text-xs text-sky-600 font-semibold">Aprobatorio:</span> <span className="font-bold">{exam.passing_score}%</span></div>
             <div><span className="text-xs text-sky-600 font-semibold">Tiempo:</span> <span className="font-bold">{exam.time_limit_min} min</span></div>
             <div><span className="text-xs text-sky-600 font-semibold">Preguntas:</span> <span className="font-bold">{questions.length}</span></div>
           </div>
 
-          <div className="card">
+          <div className="card-premium">
             <h3 className="font-semibold text-slate-700 mb-4">Agregar pregunta</h3>
             <form onSubmit={addQuestion} className="space-y-3">
               <div>
@@ -460,7 +460,7 @@ function AdminExams({ courses }) {
             </form>
           </div>
 
-          <div className="card overflow-hidden p-0">
+          <div className="card-premium overflow-hidden p-0">
             <div className="px-6 py-4 border-b border-slate-100 font-semibold text-slate-700">Preguntas ({questions.length})</div>
             <div className="divide-y divide-slate-100">
               {questions.map((q, i) => (
@@ -508,7 +508,7 @@ function AdminCalendar({ events, setEvents, courses }) {
 
   return (
     <div className="grid lg:grid-cols-3 gap-6">
-      <div className="card">
+      <div className="card-premium">
         <h3 className="font-semibold text-slate-700 mb-4">Agregar evento</h3>
         <form onSubmit={submit} className="space-y-3">
           <div>
@@ -563,7 +563,7 @@ function AdminCalendar({ events, setEvents, courses }) {
 
 function AdminCerts({ certs }) {
   return (
-    <div className="card overflow-hidden p-0">
+    <div className="card-premium overflow-hidden p-0">
       <div className="px-6 py-4 border-b border-slate-100 font-semibold text-slate-700">Constancias emitidas ({certs.length})</div>
       <div className="overflow-auto">
         <table className="w-full text-sm">
@@ -598,7 +598,7 @@ function AdminProgress({ progress }) {
   const STATUS_LABEL = { pending:'Pendiente', in_progress:'En progreso', completed:'Completado' };
 
   return (
-    <div className="card overflow-hidden p-0">
+    <div className="card-premium overflow-hidden p-0">
       <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between flex-wrap gap-3">
         <span className="font-semibold text-slate-700">Progreso por empleado</span>
         <input className="input max-w-xs" placeholder="Buscar..." value={search} onChange={e => setSearch(e.target.value)} />
