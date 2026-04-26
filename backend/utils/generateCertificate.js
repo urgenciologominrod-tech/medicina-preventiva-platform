@@ -3,7 +3,6 @@ const path = require('path');
 const PDFDocument = require('pdfkit');
 
 const LOGO_REMEINIA = path.join(__dirname, '..', 'assets', 'logos', 'remeinia.png');
-const LOGO_ENFERMERIA = path.join(__dirname, '..', 'assets', 'logos', 'enfermeria-al-rescate.png');
 const SIGNATURE_CRISTIAN = path.join(__dirname, '..', 'assets', 'signatures', 'firma-cristian.png');
 
 function safeImage(doc, imagePath, x, y, options = {}) {
@@ -19,7 +18,10 @@ function safeImage(doc, imagePath, x, y, options = {}) {
 function drawImagePlaceholder(doc, x, y, width, height, label) {
   doc.save();
   doc.roundedRect(x, y, width, height, 4).lineWidth(1).stroke('#94a3b8');
-  doc.font('Helvetica').fontSize(8).fillColor('#64748b')
+  doc
+    .font('Helvetica')
+    .fontSize(8)
+    .fillColor('#64748b')
     .text(label, x + 6, y + height / 2 - 6, { width: width - 12, align: 'center' });
   doc.restore();
 }
@@ -95,37 +97,17 @@ function generateCertificate({
 
     const navy = '#0a1f44';
     const navySoft = '#14366f';
-    const panel = '#f7fbff';
+    const panel = '#f8fbff';
     const gold = '#c59c35';
     const goldSoft = '#e4c676';
 
-    // Fondo principal y marco externo fuerte
     doc.rect(0, 0, W, H).fill(navy);
     doc.roundedRect(18, 18, W - 36, H - 36, 10).lineWidth(2).stroke(goldSoft);
     doc.roundedRect(24, 24, W - 48, H - 48, 8).lineWidth(1).stroke('#d6b26b');
 
-    // Franja decorativa izquierda translúcida
     doc.save();
-    doc.fillOpacity(0.24).roundedRect(28, 28, 126, H - 56, 8).fill(navySoft).restore();
+    doc.fillOpacity(0.2).roundedRect(30, 30, 120, H - 60, 8).fill(navySoft).restore();
 
-    // Patrón decorativo de puntos en esquina superior derecha
-    doc.save();
-    doc.fillOpacity(0.25);
-    for (let row = 0; row < 9; row++) {
-      for (let col = 0; col < 14; col++) {
-        doc.circle(W - 230 + col * 11, 44 + row * 11, 1.6).fill('#8bb0e3');
-      }
-    }
-    doc.restore();
-
-    // Listón superior derecho + sello dorado geométrico
-    doc.save();
-    doc.polygon([W - 210, 26], [W - 28, 26], [W - 28, 70], [W - 180, 70]).fill('#173a73');
-    doc.circle(W - 62, 62, 17).lineWidth(1.2).fillAndStroke(gold, '#fff3d0');
-    doc.circle(W - 62, 62, 9).fill('#8a6a1f');
-    doc.restore();
-
-    // Panel central con doble marco interno
     const panelX = 42;
     const panelY = 38;
     const panelW = W - 84;
@@ -134,102 +116,128 @@ function generateCertificate({
     doc.roundedRect(panelX + 10, panelY + 10, panelW - 20, panelH - 20, 6).lineWidth(1.6).stroke('#5f7497');
     doc.roundedRect(panelX + 16, panelY + 16, panelW - 32, panelH - 32, 5).lineWidth(0.8).stroke('#b9c6d8');
 
-    // Logos zona superior izquierda (más grandes)
-    const logoTop = panelY + 24;
-    const remLogoX = panelX + 22;
-    const enfLogoX = panelX + 182;
-
-    const hasRemeinia = safeImage(doc, LOGO_REMEINIA, remLogoX, logoTop, { fit: [150, 62], align: 'left' });
+    // Logo único institucional REMEINIA
+    const logoMaxW = 190;
+    const logoMaxH = 70;
+    const logoX = panelX + 30;
+    const logoY = panelY + 26;
+    const hasRemeinia = safeImage(doc, LOGO_REMEINIA, logoX, logoY, { fit: [logoMaxW, logoMaxH], align: 'left', valign: 'top' });
     if (!hasRemeinia) {
-      drawImagePlaceholder(doc, remLogoX, logoTop + 3, 146, 56, 'Logo REMEINIA\nbackend/assets/logos/remeinia.png');
+      drawImagePlaceholder(doc, logoX, logoY + 4, logoMaxW, logoMaxH - 8, 'Logo REMEINIA\nbackend/assets/logos/remeinia.png');
     }
 
-    const hasEnfermeria = safeImage(doc, LOGO_ENFERMERIA, enfLogoX, logoTop + 2, { fit: [165, 58], align: 'left' });
-    if (!hasEnfermeria) {
-      drawImagePlaceholder(doc, enfLogoX, logoTop + 3, 160, 56, 'Logo Enfermería al Rescate\nbackend/assets/logos/enfermeria-al-rescate.png');
-    }
-
-    // Encabezado institucional centrado
+    // Jerarquía tipográfica superior
     const titleStartX = panelX + 20;
     const titleWidth = panelW - 40;
-    doc.fillColor('#163765').font('Helvetica-Bold').fontSize(13)
-      .text('RED MEXICANA DE INNOVACIÓN EN ENFERMERÍA E INTELIGENCIA ARTIFICIAL', titleStartX, panelY + 92, {
+    doc
+      .fillColor('#163765')
+      .font('Helvetica-Bold')
+      .fontSize(13)
+      .text('RED MEXICANA DE INNOVACIÓN EN ENFERMERÍA E INTELIGENCIA ARTIFICIAL', titleStartX, panelY + 96, {
         width: titleWidth,
         align: 'center'
       });
 
-    doc.fillColor('#475569').font('Helvetica').fontSize(10.5)
-      .text('OTORGA LA PRESENTE', titleStartX, panelY + 112, { width: titleWidth, align: 'center' });
+    doc.fillColor('#475569').font('Helvetica').fontSize(11).text('OTORGA LA PRESENTE', titleStartX, panelY + 121, {
+      width: titleWidth,
+      align: 'center'
+    });
 
-    // Título principal dominante
-    doc.fillColor(gold).font('Helvetica-Bold').fontSize(52)
-      .text('CONSTANCIA', titleStartX, panelY + 125, { width: titleWidth, align: 'center' });
+    doc.fillColor(gold).font('Helvetica-Bold').fontSize(54).text('CONSTANCIA', titleStartX, panelY + 136, {
+      width: titleWidth,
+      align: 'center'
+    });
 
-    doc.fillColor('#3b4f6b').font('Helvetica').fontSize(12)
-      .text('A', titleStartX, panelY + 182, { width: titleWidth, align: 'center' });
+    doc.fillColor('#3b4f6b').font('Helvetica').fontSize(12).text('A', titleStartX, panelY + 196, {
+      width: titleWidth,
+      align: 'center'
+    });
 
-    // Nombre mucho más grande y elegante
     const attendeeName = (userName || 'PARTICIPANTE').toUpperCase();
-    doc.fillColor('#102a43').font('Times-BoldItalic').fontSize(40)
-      .text(attendeeName, panelX + 70, panelY + 196, { width: panelW - 140, align: 'center' });
+    doc.fillColor('#102a43').font('Times-BoldItalic').fontSize(39).text(attendeeName, panelX + 80, panelY + 207, {
+      width: panelW - 160,
+      align: 'center'
+    });
 
-    // Línea decorativa bajo el nombre
-    doc.moveTo(panelX + 150, panelY + 246).lineTo(panelX + panelW - 150, panelY + 246).lineWidth(1.2).stroke('#9aaac0');
+    doc.moveTo(panelX + 165, panelY + 258).lineTo(panelX + panelW - 165, panelY + 258).lineWidth(1.2).stroke('#9aaac0');
 
-    // Cuerpo académico con mejor distribución
     const safeCourseName = courseName || 'NOMBRE DEL CURSO';
     const dateText = date || new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
-    const hoursText = hours ? `, con duración de ${hours} horas/créditos curriculares` : ', con duración registrada en el programa académico';
+    const normalizedHours = Number.isFinite(hours) ? hours : 24;
+    const hoursText = `con duración de ${normalizedHours} horas curriculares`;
     const scoreText = Number.isFinite(score) ? ` y con calificación de ${score}/100` : '';
 
-    doc.fillColor('#1f2937').font('Helvetica').fontSize(12.4)
-      .text(
-        `Por haber acreditado el programa académico del CURSO / TALLER DE ${safeCourseName}${hoursText}, realizado el ${dateText}${scoreText}.`,
-        panelX + 86,
-        panelY + 258,
-        { width: panelW - 172, align: 'center', lineGap: 5 }
-      );
+    doc.fillColor('#1f2937').font('Helvetica').fontSize(12.2).text(
+      `Por haber acreditado satisfactoriamente el programa académico del CURSO / TALLER DE ${safeCourseName}, ${hoursText}, realizado el ${dateText}${scoreText}.`,
+      panelX + 90,
+      panelY + 270,
+      { width: panelW - 180, align: 'center', lineGap: 5 }
+    );
 
-    // Bloque inferior: firma, folio, QR con mejor separación
-    const footerTop = H - 136;
+    // Sección inferior organizada para evitar traslapes
+    const footerTop = H - 147;
 
-    // Firma en inferior izquierda/centro
-    const signX = panelX + 130;
-    const signY = footerTop;
-    const signW = 250;
+    // Firma a la izquierda, proporcional y estable ante reemplazo de imagen
+    const signBlockX = panelX + 88;
+    const signBlockY = footerTop;
+    const signBlockW = 300;
+    const signImgW = 145;
+    const signImgH = 52;
+    const signImgX = signBlockX + (signBlockW - signImgW) / 2;
+    const signImgY = signBlockY - 8;
 
-    const hasSignature = safeImage(doc, SIGNATURE_CRISTIAN, signX + 64, signY - 5, { fit: [126, 44], align: 'center' });
+    const hasSignature = safeImage(doc, SIGNATURE_CRISTIAN, signImgX, signImgY, {
+      fit: [signImgW, signImgH],
+      align: 'center',
+      valign: 'center'
+    });
     if (!hasSignature) {
-      drawImagePlaceholder(doc, signX + 64, signY - 2, 124, 40, 'Firma digital\nbackend/assets/signatures/firma-cristian.png');
+      drawImagePlaceholder(doc, signImgX, signImgY + 4, signImgW, signImgH - 10, 'Firma digital\nbackend/assets/signatures/firma-cristian.png');
     }
 
-    doc.moveTo(signX + 12, signY + 46).lineTo(signX + signW - 12, signY + 46).lineWidth(1).stroke('#475569');
-    doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(10.2)
-      .text('MTRO. CRISTIAN MINROD MOLINA LÓPEZ', signX, signY + 52, { width: signW, align: 'center' });
-    doc.fillColor('#475569').font('Helvetica').fontSize(9)
-      .text('PRESIDENTE DE REMEINIA', signX, signY + 66, { width: signW, align: 'center' });
+    doc.moveTo(signBlockX + 18, signBlockY + 48).lineTo(signBlockX + signBlockW - 18, signBlockY + 48).lineWidth(1).stroke('#475569');
+    doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(10).text('MTRO. CRISTIAN MINROD MOLINA LÓPEZ', signBlockX, signBlockY + 54, {
+      width: signBlockW,
+      align: 'center'
+    });
+    doc.fillColor('#475569').font('Helvetica').fontSize(9).text('PRESIDENTE DE REMEINIA', signBlockX, signBlockY + 68, {
+      width: signBlockW,
+      align: 'center'
+    });
 
-    // QR en inferior derecha
-    const qrSize = 84;
-    const qrX = W - 156;
-    const qrY = footerTop - 10;
-    drawQr(doc, `${folio}|${userName}|${courseName}`, qrX, qrY, qrSize);
+    // Folio en bloque dedicado (centro-derecha), separado del QR
+    const resolvedFolio = folio || 'REMEINIA-ACAD-0000-000';
+    const folioX = W - 340;
+    const folioY = footerTop + 30;
+    const folioW = 150;
 
-    doc.fillColor('#334155').font('Helvetica-Bold').fontSize(8.8)
-      .text('Validación QR', qrX - 2, qrY + qrSize + 5, { width: qrSize + 12, align: 'center' });
+    doc.roundedRect(folioX - 8, folioY - 8, folioW + 16, 42, 5).fillAndStroke('#edf3fb', '#c8d5e6');
+    doc.fillColor('#475569').font('Helvetica').fontSize(8.8).text('FOLIO DE VALIDACIÓN', folioX, folioY, {
+      width: folioW,
+      align: 'center'
+    });
+    doc.fillColor('#1e293b').font('Helvetica-Bold').fontSize(10.6).text(resolvedFolio, folioX, folioY + 13, {
+      width: folioW,
+      align: 'center'
+    });
 
-    // Folio más visible cerca del QR
-    doc.fillColor('#1e293b').font('Helvetica-Bold').fontSize(11)
-      .text(`FOLIO: ${folio || 'REMEINIA-ACAD-0000-000'}`, W - 305, H - 98, { width: 178, align: 'right' });
+    // QR inferior derecha
+    const qrSize = 86;
+    const qrX = W - 145;
+    const qrY = footerTop - 8;
+    drawQr(doc, `${resolvedFolio}|${userName}|${courseName}`, qrX, qrY, qrSize);
 
-    // Footer institucional
-    doc.fillColor('#475569').font('Helvetica').fontSize(8.8)
-      .text(
-        'Documento con validez curricular emitido por REMEINIA, conforme al acuerdo interno de formación continua y capacitación profesional.',
-        panelX + 36,
-        H - 54,
-        { width: panelW - 190, align: 'left' }
-      );
+    doc.fillColor('#334155').font('Helvetica-Bold').fontSize(8.8).text('Validación QR', qrX - 2, qrY + qrSize + 5, {
+      width: qrSize + 12,
+      align: 'center'
+    });
+
+    doc.fillColor('#475569').font('Helvetica').fontSize(8.8).text(
+      'Documento con validez curricular emitido por REMEINIA, conforme al acuerdo interno de formación continua y capacitación profesional.',
+      panelX + 36,
+      H - 54,
+      { width: panelW - 190, align: 'left' }
+    );
 
     doc.end();
   });
