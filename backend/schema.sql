@@ -28,7 +28,7 @@ CREATE TABLE courses (
 CREATE TABLE course_content (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   course_id UUID REFERENCES courses(id) ON DELETE CASCADE,
-  type VARCHAR(20) NOT NULL CHECK (type IN ('video', 'infographic')),
+  type VARCHAR(20) NOT NULL CHECK (type IN ('youtube', 'video', 'image', 'infographic', 'pdf', 'document', 'link')),
   title VARCHAR(200),
   url TEXT NOT NULL,
   order_index INTEGER NOT NULL DEFAULT 0
