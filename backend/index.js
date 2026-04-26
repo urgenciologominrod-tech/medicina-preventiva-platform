@@ -12,15 +12,31 @@ const calendarRoutes = require('./routes/calendar');
 const competencyRoutes = require('./routes/competency');
 const adminRoutes = require('./routes/admin');
 
-
 const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
 const app = express();
+app.set('trust proxy', 1);
 
-app.use(cors({ origin: process.env.FRONTEND_URL || '*' }));
+const configuredOrigins = (process.env.FRONTEND_URL || '')
+  .split(',')
+  .map(origin => origin.trim())
+  .filter(Boolean);
+
+const allowedOrigins = new Set([
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  ...configuredOrigins
+]);
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.has(origin)) return callback(null, true);
+    return callback(new Error(`Origen no permitido por CORS: ${origin}`));
+  }
+}));
 app.use(express.json());
 app.use('/uploads', express.static(uploadsDir));
 
