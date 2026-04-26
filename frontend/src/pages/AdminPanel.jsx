@@ -188,9 +188,7 @@ function AdminCourses({ courses, setCourses }) {
         setUploadingFile(true);
         const formData = new FormData();
         formData.append('file', selectedFile);
-        const uploadResponse = await api.post('/admin/upload', formData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
+        const uploadResponse = await api.post('/admin/upload', formData);
         finalUrl = uploadResponse.data.url;
       }
 
@@ -206,7 +204,11 @@ function AdminCourses({ courses, setCourses }) {
       setResourceMode('url');
       setMsg('Contenido agregado correctamente');
     } catch (err) {
-      setContentError(err.response?.data?.error || 'No se pudo agregar el contenido');
+      const backendError = err.response?.data;
+      const parts = [backendError?.error || 'No se pudo agregar el contenido'];
+      if (backendError?.code) parts.push(`code: ${backendError.code}`);
+      if (backendError?.detail) parts.push(`detail: ${backendError.detail}`);
+      setContentError(parts.join(' | '));
     } finally {
       setUploadingFile(false);
     }
