@@ -71,74 +71,216 @@ function AdminDashboard({ stats }) {
 }
 
 function AdminUsers({ users, setUsers }) {
-  const [form, setForm] = useState({ name:'', email:'', password:'', role:'employee', department:'' });
+  const [createForm, setCreateForm] = useState({ name:'', email:'', password:'', role:'employee', department:'' });
+  const [editForm, setEditForm] = useState({ id:null, name:'', email:'', role:'employee', department:'', is_active:true });
+  const [passwordForm, setPasswordForm] = useState({ id:null, password:'', confirmPassword:'' });
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
 
-  const submit = async e => {
+  const closeEditModal = () => setEditForm({ id:null, name:'', email:'', role:'employee', department:'', is_active:true });
+  const closePasswordModal = () => setPasswordForm({ id:null, password:'', confirmPassword:'' });
+
+  const submitCreate = async (e) => {
     e.preventDefault();
-    setSaving(true); setMsg('');
+    setSaving(true);
+    setMsg('');
+
     try {
-      const { data } = await api.post('/auth/register', form);
+      const { data } = await api.post('/admin/users', createForm);
       setUsers(prev => [data, ...prev]);
-      setForm({ name:'', email:'', password:'', role:'employee', department:'' });
-      setMsg('Usuario creado exitosamente');
+      setCreateForm({ name:'', email:'', password:'', role:'employee', department:'' });
+      setMsg('Usuario creado exitosamente.');
     } catch (err) {
-      setMsg(err.response?.data?.error || 'Error al crear usuario');
-    } finally { setSaving(false); }
+      setMsg(err.response?.data?.error || 'Error al crear usuario.');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const toggle = async (id) => {
-    const { data } = await api.patch(`/admin/users/${id}/toggle`);
-    setUsers(prev => prev.map(u => u.id === id ? { ...u, is_active: data.is_active } : u));
+  const submitEdit = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    setMsg('');
+
+    try {
+      const { data } = await api.put(`/admin/users/${editForm.id}`, editForm);
+      setUsers(prev => prev.map(u => (u.id === data.id ? data : u)));
+      closeEditModal();
+      setMsg('Usuario actualizado correctamente.');
+    } catch (err) {
+      setMsg(err.response?.data?.error || 'Error al actualizar usuario.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const submitPassword = async (e) => {
+    e.preventDefault();
+    setMsg('');
+
+    if (!passwordForm.password || !passwordForm.confirmPassword) {
+      setMsg('Debes capturar y confirmar la nueva contraseña.');
+      return;
+    }
+
+    if (passwordForm.password !== passwordForm.confirmPassword) {
+      setMsg('Las contraseñas no coinciden.');
+      return;
+    }
+
+    setSaving(true);
+
+    try {
+      await api.patch(`/admin/users/${passwordForm.id}/password`, { password: passwordForm.password });
+      closePasswordModal();
+      setMsg('Contraseña actualizada correctamente.');
+    } catch (err) {
+      setMsg(err.response?.data?.error || 'Error al cambiar la contraseña.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const updateStatus = async (user, isActive) => {
+    try {
+      const { data } = await api.patch(`/admin/users/${user.id}/status`, { is_active: isActive });
+      setUsers(prev => prev.map(u => (u.id === data.id ? data : u)));
+      setMsg(`Usuario ${isActive ? 'activado' : 'desactivado'} correctamente.`);
+    } catch (err) {
+      setMsg(err.response?.data?.error || 'No se pudo actualizar el estado.');
+    }
   };
 
   return (
     <div className="grid lg:grid-cols-3 gap-6">
       <div className="card-premium">
-        <h2 className="font-semibold text-slate-700 mb-4">Registrar usuario</h2>
-        <form onSubmit={submit} className="space-y-3">
-          {[['name','Nombre completo','text'],['email','Correo electrónico','email'],['password','Contraseña','password'],['department','Departamento','text']].map(([f,l,t]) => (
+        <h2 className="font-semibold text-slate-700 mb-4">Crear usuario</h2>
+        <form onSubmit={submitCreate} className="space-y-3">
+          {[['name','Nombre completo','text'],['email','Correo electrónico','email'],['password','Contraseña temporal','password'],['department','Departamento','text']].map(([f,l,t]) => (
             <div key={f}>
               <label className="label">{l}</label>
-              <input type={t} className="input" required={f !== 'department'} value={form[f]}
-                onChange={e => setForm(p => ({...p, [f]: e.target.value}))} />
+              <input type={t} className="input" required={f !== 'department'} value={createForm[f]}
+                onChange={e => setCreateForm(p => ({ ...p, [f]: e.target.value }))} />
             </div>
           ))}
           <div>
             <label className="label">Rol</label>
-            <select className="input" value={form.role} onChange={e => setForm(p => ({...p, role: e.target.value}))}>
+            <select className="input" value={createForm.role} onChange={e => setCreateForm(p => ({ ...p, role: e.target.value }))}>
               <option value="employee">Empleado</option>
               <option value="admin">Administrador</option>
             </select>
           </div>
-          {msg && <p className={`text-xs ${msg.includes('exitosamente') ? 'text-green-600' : 'text-red-600'}`}>{msg}</p>}
+          {msg && <p className={`text-xs ${msg.includes('correctamente') || msg.includes('exitosamente') ? 'text-green-600' : 'text-red-600'}`}>{msg}</p>}
           <button type="submit" disabled={saving} className="btn-primary w-full">{saving ? 'Guardando...' : 'Crear usuario'}</button>
         </form>
       </div>
 
       <div className="lg:col-span-2 card overflow-hidden p-0">
         <div className="px-6 py-4 border-b border-slate-100 font-semibold text-slate-700">Usuarios ({users.length})</div>
-        <div className="overflow-auto max-h-[500px]">
+        <div className="overflow-auto max-h-[560px]">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 sticky top-0">
-              <tr>{['Nombre','Email','Rol','Dpto.','Estado',''].map(h => <th key={h} className="text-left px-4 py-2 text-xs font-semibold text-slate-500">{h}</th>)}</tr>
+              <tr>{['Nombre','Email','Rol','Estado','Creado','Acciones'].map(h => <th key={h} className="text-left px-4 py-2 text-xs font-semibold text-slate-500">{h}</th>)}</tr>
             </thead>
             <tbody>
               {users.map(u => (
                 <tr key={u.id} className="border-t border-slate-100 hover:bg-slate-50">
                   <td className="px-4 py-2 font-medium">{u.name}</td>
                   <td className="px-4 py-2 text-slate-500">{u.email}</td>
-                  <td className="px-4 py-2"><span className={`text-xs px-2 py-0.5 rounded-full ${u.role==='admin' ? 'bg-purple-100 text-purple-700' : 'bg-sky-100 text-sky-700'}`}>{u.role}</span></td>
-                  <td className="px-4 py-2 text-slate-500">{u.department || '—'}</td>
-                  <td className="px-4 py-2"><span className={`text-xs px-2 py-0.5 rounded-full ${u.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>{u.is_active ? 'Activo' : 'Inactivo'}</span></td>
-                  <td className="px-4 py-2"><button onClick={() => toggle(u.id)} className="text-xs text-sky-600 hover:underline">{u.is_active ? 'Desactivar' : 'Activar'}</button></td>
+                  <td className="px-4 py-2">
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${u.role === 'admin' ? 'bg-purple-100 text-purple-700' : 'bg-sky-100 text-sky-700'}`}>{u.role}</span>
+                  </td>
+                  <td className="px-4 py-2">
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${u.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>{u.is_active ? 'Activo' : 'Inactivo'}</span>
+                  </td>
+                  <td className="px-4 py-2 text-slate-500">{u.created_at ? new Date(u.created_at).toLocaleDateString() : '—'}</td>
+                  <td className="px-4 py-2">
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        onClick={() => setEditForm({ id:u.id, name:u.name || '', email:u.email || '', role:u.role || 'employee', department:u.department || '', is_active:Boolean(u.is_active) })}
+                        className="text-xs text-sky-600 hover:underline"
+                      >
+                        Editar
+                      </button>
+                      <button
+                        onClick={() => setPasswordForm({ id:u.id, password:'', confirmPassword:'' })}
+                        className="text-xs text-indigo-600 hover:underline"
+                      >
+                        Cambiar contraseña
+                      </button>
+                      <button
+                        onClick={() => updateStatus(u, !u.is_active)}
+                        className="text-xs text-rose-600 hover:underline"
+                      >
+                        {u.is_active ? 'Desactivar' : 'Activar'}
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       </div>
+
+      {editForm.id && (
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 border border-slate-200">
+            <h3 className="text-lg font-semibold text-slate-800 mb-4">Editar usuario</h3>
+            <form onSubmit={submitEdit} className="space-y-3">
+              <div>
+                <label className="label">Nombre completo</label>
+                <input className="input" required value={editForm.name} onChange={e => setEditForm(p => ({ ...p, name:e.target.value }))} />
+              </div>
+              <div>
+                <label className="label">Correo electrónico</label>
+                <input type="email" className="input" required value={editForm.email} onChange={e => setEditForm(p => ({ ...p, email:e.target.value }))} />
+              </div>
+              <div>
+                <label className="label">Departamento</label>
+                <input className="input" value={editForm.department} onChange={e => setEditForm(p => ({ ...p, department:e.target.value }))} />
+              </div>
+              <div>
+                <label className="label">Rol</label>
+                <select className="input" value={editForm.role} onChange={e => setEditForm(p => ({ ...p, role:e.target.value }))}>
+                  <option value="employee">Empleado</option>
+                  <option value="admin">Administrador</option>
+                </select>
+              </div>
+              <div className="flex items-center gap-2">
+                <input id="isActiveUser" type="checkbox" checked={editForm.is_active} onChange={e => setEditForm(p => ({ ...p, is_active:e.target.checked }))} className="w-4 h-4 accent-sky-500" />
+                <label htmlFor="isActiveUser" className="text-sm text-slate-700">Usuario activo</label>
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button type="button" onClick={closeEditModal} className="btn-secondary">Cancelar</button>
+                <button type="submit" disabled={saving} className="btn-primary">{saving ? 'Guardando...' : 'Guardar cambios'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {passwordForm.id && (
+        <div className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 border border-slate-200">
+            <h3 className="text-lg font-semibold text-slate-800 mb-4">Cambiar contraseña</h3>
+            <form onSubmit={submitPassword} className="space-y-3">
+              <div>
+                <label className="label">Nueva contraseña temporal</label>
+                <input type="password" className="input" required minLength={6} value={passwordForm.password} onChange={e => setPasswordForm(p => ({ ...p, password:e.target.value }))} />
+              </div>
+              <div>
+                <label className="label">Confirmar nueva contraseña</label>
+                <input type="password" className="input" required minLength={6} value={passwordForm.confirmPassword} onChange={e => setPasswordForm(p => ({ ...p, confirmPassword:e.target.value }))} />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button type="button" onClick={closePasswordModal} className="btn-secondary">Cancelar</button>
+                <button type="submit" disabled={saving} className="btn-primary">{saving ? 'Actualizando...' : 'Guardar contraseña'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
