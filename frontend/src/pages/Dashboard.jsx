@@ -1,94 +1,274 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
-import { EmptyState, PageHeader, SectionCard, StatCard } from '../components/ui';
+import { EmptyState, NotificationCard, PageHeader, SectionCard, StatCard } from '../components/ui';
+
+const STATUS_PROGRESS = {
+  pending: 0,
+  in_progress: 55,
+  completed: 100,
+};
+
+function formatProgress(status) {
+  return STATUS_PROGRESS[status] ?? 0;
+}
 
 export default function Dashboard() {
   const { user } = useAuth();
   const [courses, setCourses] = useState([]);
   const [certs, setCerts] = useState([]);
   const [events, setEvents] = useState([]);
+  const [adminStats, setAdminStats] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([
+    const requests = [
       api.get('/courses'),
       api.get('/certificates/my'),
-      api.get('/calendar', { params: { year: new Date().getFullYear(), month: new Date().getMonth() + 1 } })
-    ]).then(([c, cert, ev]) => {
-      setCourses(c.data);
-      setCerts(cert.data);
-      setEvents(ev.data);
-    }).finally(() => setLoading(false));
-  }, []);
+      api.get('/calendar', { params: { year: new Date().getFullYear(), month: new Date().getMonth() + 1 } }),
+    ];
 
-  const completed = courses.filter(c => c.progress_status === 'completed').length;
-  const inProgress = courses.filter(c => c.progress_status === 'in_progress').length;
-  const pct = courses.length ? Math.round((completed / courses.length) * 100) : 0;
+    if (user?.role === 'admin') {
+      requests.push(api.get('/admin/stats'));
+    }
+
+    Promise.all(requests)
+      .then(([coursesResp, certsResp, eventsResp, adminStatsResp]) => {
+        setCourses(coursesResp.data || []);
+        setCerts(certsResp.data || []);
+        setEvents(eventsResp.data || []);
+        setAdminStats(adminStatsResp?.data || null);
+      })
+      .finally(() => setLoading(false));
+  }, [user?.role]);
+
+  const dashboardData = useMemo(() => {
+    const completed = courses.filter(course => course.progress_status === 'completed');
+    const inProgress = courses.filter(course => course.progress_status === 'in_progress');
+    const pending = courses.filter(course => course.progress_status === 'pending');
+
+    const activeCourse = inProgress[0] || pending[0] || completed[0] || null;
+    const activeCourseProgress = activeCourse ? formatProgress(activeCourse.progress_status) : 0;
+
+    const certificateCourseIds = new Set(certs.map(cert => cert.course_id));
+    const certificateReady = completed.filter(course => !certificateCourseIds.has(course.id));
+    const evaluationCandidates = [...inProgress, ...completed.filter(course => !certificateCourseIds.has(course.id))].slice(0, 3);
+
+    return {
+      completed,
+      inProgress,
+      pending,
+      activeCourse,
+      activeCourseProgress,
+      certificateReady,
+      evaluationCandidates,
+      pendingEvaluations: evaluationCandidates.length,
+    };
+  }, [courses, certs]);
+
+  const notifications = useMemo(() => {
+    const list = [
+      {
+        id: 'welcome',
+        icon: '👋',
+        title: 'Bienvenido a la plataforma de capacitación institucional.',
+        description: 'Desde este inicio podrás continuar tu formación y revisar acciones prioritarias.',
+        tone: 'sky',
+      },
+    ];
+
+    if (dashboardData.pending.length > 0) {
+      list.push({
+        id: 'pending-courses',
+        icon: '📚',
+        title: 'Tienes cursos pendientes por completar.',
+        description: `${dashboardData.pending.length} curso(s) esperan tu avance para completar tu plan institucional.`,
+        actionLabel: 'Ir al curso',
+        actionTo: dashboardData.activeCourse ? `/courses/${dashboardData.activeCourse.id}` : '/courses',
+        tone: 'amber',
+      });
+    }
+
+    if (dashboardData.pendingEvaluations > 0) {
+      const target = dashboardData.evaluationCandidates[0];
+      list.push({
+        id: 'pending-eval',
+        icon: '📝',
+        title: 'Ya puedes presentar la evaluación de un curso completado.',
+        description: 'Revisa tus cursos avanzados y presenta el examen correspondiente.',
+        actionLabel: target ? 'Presentar examen' : undefined,
+        actionTo: target ? `/courses/${target.id}/exam` : undefined,
+        tone: 'violet',
+      });
+    }
+
+    if (certs.length > 0) {
+      list.push({
+        id: 'certificates',
+        icon: '🏅',
+        title: 'Tienes constancias disponibles para descargar.',
+        description: `Actualmente cuentas con ${certs.length} constancia(s) emitida(s).`,
+        actionLabel: 'Ver constancias',
+        actionTo: '/certificates',
+        tone: 'emerald',
+      });
+    }
+
+    if (dashboardData.inProgress.length > 0) {
+      list.push({
+        id: 'progress-update',
+        icon: '📈',
+        title: 'Tu progreso se ha actualizado correctamente.',
+        description: `Llevas ${dashboardData.inProgress.length} curso(s) en progreso activo.`,
+        tone: 'sky',
+      });
+    }
+
+    return list;
+  }, [certs.length, dashboardData]);
+
+  const upcomingEvents = events.filter(event => new Date(event.scheduled_date) >= new Date()).slice(0, 4);
+  const quickActions = [
+    { id: 'continue', label: 'Continuar curso', to: dashboardData.activeCourse ? `/courses/${dashboardData.activeCourse.id}` : '/courses' },
+    { id: 'exam', label: 'Presentar evaluación', to: dashboardData.evaluationCandidates[0] ? `/courses/${dashboardData.evaluationCandidates[0].id}/exam` : '/courses' },
+    { id: 'cert', label: 'Descargar constancia', to: '/certificates' },
+  ];
 
   if (loading) return <div className="flex justify-center items-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-500" /></div>;
 
-  const upcomingEvents = events.filter(e => new Date(e.scheduled_date) >= new Date()).slice(0, 4);
-  const pendingCourses = courses.filter(c => c.progress_status !== 'completed').slice(0, 4);
-
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8">
-      <PageHeader title={`Bienvenido, ${user?.name}`} subtitle={`${user?.department || 'Sin departamento'} · Continúa tu ruta de formación`} />
+    <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
+      <PageHeader
+        title={`Bienvenido/a, ${user?.name || 'Usuario'}`}
+        subtitle="Tu capacitación institucional en un solo lugar"
+        action={<Link to={user?.role === 'admin' ? '/admin' : '/courses'} className="btn-primary">{user?.role === 'admin' ? 'Ir al panel admin' : 'Explorar cursos'}</Link>}
+      />
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-        <StatCard label="Total cursos" value={courses.length} icon="📚" tone="sky" />
-        <StatCard label="Completados" value={completed} icon="✅" tone="emerald" />
-        <StatCard label="En progreso" value={inProgress} icon="⏳" tone="amber" />
-        <StatCard label="Constancias" value={certs.length} icon="🏆" tone="violet" />
-      </div>
+      {user?.role === 'admin' ? (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <StatCard label="Usuarios activos" value={adminStats?.totalEmployees ?? 0} icon="👥" tone="sky" />
+            <StatCard label="Cursos creados" value={adminStats?.totalCourses ?? courses.length} icon="📚" tone="violet" />
+            <StatCard label="Constancias emitidas" value={adminStats?.totalCertificates ?? 0} icon="🏆" tone="emerald" />
+            <StatCard label="Tasa de aprobación" value={`${adminStats?.examPassRate ?? 0}%`} icon="📊" tone="amber" />
+          </div>
 
-      <div className="card-premium mb-6">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="font-semibold text-slate-800">Progreso general</h2>
-          <span className="text-xl font-bold text-sky-700">{pct}%</span>
-        </div>
-        <div className="bg-slate-200 rounded-full h-3 overflow-hidden">
-          <div className="bg-gradient-to-r from-cyan-500 to-sky-600 h-full rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
-        </div>
-        <p className="text-xs text-slate-500 mt-2">{completed} de {courses.length} cursos completados</p>
-      </div>
+          <div className="grid lg:grid-cols-3 gap-6">
+            <SectionCard title="Accesos rápidos administrativos">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {[
+                  { label: 'Usuarios', to: '/admin' },
+                  { label: 'Cursos', to: '/admin' },
+                  { label: 'Exámenes', to: '/admin' },
+                  { label: 'Progreso', to: '/admin' },
+                ].map(action => (
+                  <Link key={action.label} to={action.to} className="rounded-xl border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 hover:border-sky-300 hover:bg-sky-50 transition-colors">
+                    {action.label}
+                  </Link>
+                ))}
+              </div>
+            </SectionCard>
 
-      <div className="grid md:grid-cols-2 gap-6">
-        <SectionCard title="Cursos pendientes" action={<Link to="/courses" className="text-sky-700 text-sm hover:underline">Ver todos</Link>}>
-          {pendingCourses.length === 0 ? (
-            <EmptyState title="¡Excelente trabajo!" description="No tienes cursos pendientes por ahora." />
-          ) : pendingCourses.map(c => (
-            <Link key={c.id} to={`/courses/${c.id}`} className="flex items-center justify-between py-3 border-b border-slate-100 last:border-0 hover:bg-slate-50 -mx-2 px-2 rounded-xl transition-colors">
-              <div>
-                <p className="text-sm font-medium text-slate-700">{c.title}</p>
-                <p className="text-xs text-slate-400">{c.category}</p>
+            <SectionCard title="Mensajes internos">
+              <div className="space-y-3">
+                {notifications.map(notification => <NotificationCard key={notification.id} {...notification} />)}
               </div>
-              <div className="flex items-center gap-2">
-                {c.is_mandatory && <span className="badge-mandatory">Obligatorio</span>}
-                <span className={c.progress_status === 'in_progress' ? 'badge-pending' : 'badge-optional'}>{c.progress_status === 'in_progress' ? 'En progreso' : 'Pendiente'}</span>
-              </div>
-            </Link>
-          ))}
-        </SectionCard>
+            </SectionCard>
 
-        <SectionCard title="Próximos eventos" action={<Link to="/calendar" className="text-sky-700 text-sm hover:underline">Ver calendario</Link>}>
-          {upcomingEvents.length === 0 ? (
-            <EmptyState title="Sin eventos próximos" description="Cuando existan eventos obligatorios, aparecerán aquí." />
-          ) : upcomingEvents.map(e => (
-            <div key={e.id} className="flex items-start gap-3 py-2 border-b border-slate-100 last:border-0">
-              <div className="bg-sky-100 text-sky-700 rounded-lg p-2 text-center min-w-[48px]">
-                <div className="text-[10px] font-semibold">{new Date(e.scheduled_date + 'T00:00:00').toLocaleDateString('es-MX', { month:'short' }).toUpperCase()}</div>
-                <div className="text-lg font-bold leading-none">{new Date(e.scheduled_date + 'T00:00:00').getDate()}</div>
+            <SectionCard title="Próximos eventos">
+              {upcomingEvents.length === 0 ? (
+                <EmptyState title="Sin eventos próximos" description="Cuando existan eventos institucionales, aparecerán aquí." />
+              ) : upcomingEvents.map(event => (
+                <div key={event.id} className="flex items-start gap-3 py-2 border-b border-slate-100 last:border-0">
+                  <div className="bg-sky-100 text-sky-700 rounded-lg p-2 text-center min-w-[52px]">
+                    <div className="text-[10px] font-semibold uppercase">{new Date(`${event.scheduled_date}T00:00:00`).toLocaleDateString('es-MX', { month: 'short' })}</div>
+                    <div className="text-lg font-bold leading-none">{new Date(`${event.scheduled_date}T00:00:00`).getDate()}</div>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-slate-700">{event.title || event.course_title}</p>
+                    {event.is_mandatory && <span className="badge-mandatory">Obligatorio</span>}
+                  </div>
+                </div>
+              ))}
+            </SectionCard>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <StatCard label="Cursos disponibles" value={courses.length} icon="📘" tone="sky" />
+            <StatCard label="Cursos completados" value={dashboardData.completed.length} icon="✅" tone="emerald" />
+            <StatCard label="Constancias obtenidas" value={certs.length} icon="🎓" tone="violet" />
+            <StatCard label="Evaluaciones pendientes" value={dashboardData.pendingEvaluations} icon="📝" tone="amber" />
+          </div>
+
+          <div className="grid lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 card-premium bg-gradient-to-br from-slate-900 via-sky-900 to-cyan-800 text-white border-slate-800 shadow-xl">
+              <p className="text-xs uppercase tracking-[0.2em] text-sky-100/80 mb-2">Curso activo recomendado</p>
+              <h2 className="text-2xl font-bold mb-2">{dashboardData.activeCourse?.title || 'Aún no tienes cursos asignados'}</h2>
+              <p className="text-sm text-sky-100/80 mb-5">{dashboardData.activeCourse?.category || 'Inicia tu ruta y fortalece tus competencias institucionales.'}</p>
+
+              <div className="mb-4">
+                <div className="flex items-center justify-between text-sm mb-2">
+                  <span>Avance del curso</span>
+                  <span className="font-semibold">{dashboardData.activeCourseProgress}%</span>
+                </div>
+                <div className="bg-white/20 h-2 rounded-full overflow-hidden">
+                  <div className="bg-cyan-300 h-full rounded-full" style={{ width: `${dashboardData.activeCourseProgress}%` }} />
+                </div>
               </div>
-              <div>
-                <p className="text-sm font-medium text-slate-700">{e.title || e.course_title}</p>
-                {e.is_mandatory && <span className="badge-mandatory">Obligatorio</span>}
-              </div>
+
+              <Link
+                to={dashboardData.activeCourse ? `/courses/${dashboardData.activeCourse.id}` : '/courses'}
+                className="inline-flex rounded-xl bg-white text-sky-800 px-4 py-2.5 font-semibold text-sm hover:bg-sky-50 transition-colors"
+              >
+                Continuar curso
+              </Link>
             </div>
-          ))}
-        </SectionCard>
-      </div>
+
+            <SectionCard title="Próximas acciones">
+              <div className="space-y-3">
+                {quickActions.map(action => (
+                  <Link key={action.id} to={action.to} className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-700 hover:border-sky-300 hover:bg-sky-50 transition-colors">
+                    <span>{action.label}</span>
+                    <span className="text-sky-700">→</span>
+                  </Link>
+                ))}
+              </div>
+            </SectionCard>
+          </div>
+
+          <div className="grid lg:grid-cols-2 gap-6">
+            <SectionCard title="Mensajes y notificaciones internas" action={<Link to="/courses" className="text-sky-700 text-sm hover:underline">Ver cursos</Link>}>
+              {notifications.length === 0 ? (
+                <EmptyState title="Todo al día. No tienes pendientes por ahora." description="Cuando se genere una novedad de capacitación, la verás en esta sección." />
+              ) : (
+                <div className="space-y-3">
+                  {notifications.map(notification => <NotificationCard key={notification.id} {...notification} />)}
+                </div>
+              )}
+            </SectionCard>
+
+            <SectionCard title="Próximos eventos" action={<Link to="/calendar" className="text-sky-700 text-sm hover:underline">Ver calendario</Link>}>
+              {upcomingEvents.length === 0 ? (
+                <EmptyState title="Sin eventos próximos" description="Cuando existan eventos obligatorios, aparecerán aquí." />
+              ) : upcomingEvents.map(event => (
+                <div key={event.id} className="flex items-start gap-3 py-2 border-b border-slate-100 last:border-0">
+                  <div className="bg-sky-100 text-sky-700 rounded-lg p-2 text-center min-w-[52px]">
+                    <div className="text-[10px] font-semibold uppercase">{new Date(`${event.scheduled_date}T00:00:00`).toLocaleDateString('es-MX', { month: 'short' })}</div>
+                    <div className="text-lg font-bold leading-none">{new Date(`${event.scheduled_date}T00:00:00`).getDate()}</div>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-slate-700">{event.title || event.course_title}</p>
+                    {event.is_mandatory && <span className="badge-mandatory">Obligatorio</span>}
+                  </div>
+                </div>
+              ))}
+            </SectionCard>
+          </div>
+        </>
+      )}
     </div>
   );
 }

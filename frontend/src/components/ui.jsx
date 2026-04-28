@@ -55,6 +55,33 @@ export function EmptyState({ title, description, actionLabel, actionTo }) {
   );
 }
 
+export function NotificationCard({ icon, title, description, actionLabel, actionTo, tone = 'sky' }) {
+  const tones = {
+    sky: 'border-sky-100 bg-sky-50/70',
+    amber: 'border-amber-100 bg-amber-50/80',
+    emerald: 'border-emerald-100 bg-emerald-50/80',
+    violet: 'border-violet-100 bg-violet-50/80',
+    slate: 'border-slate-200 bg-white',
+  };
+
+  return (
+    <div className={`rounded-2xl border p-4 ${tones[tone] || tones.sky}`}>
+      <div className="flex items-start gap-3">
+        <div className="text-xl leading-none">{icon}</div>
+        <div className="flex-1">
+          <h3 className="text-sm font-semibold text-slate-800">{title}</h3>
+          <p className="text-xs text-slate-600 mt-1">{description}</p>
+          {actionLabel && actionTo && (
+            <Link to={actionTo} className="inline-flex mt-3 text-xs font-semibold text-sky-700 hover:text-sky-800 hover:underline">
+              {actionLabel}
+            </Link>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function CourseCard({ course, statusClass, statusLabel }) {
   return (
     <Link
