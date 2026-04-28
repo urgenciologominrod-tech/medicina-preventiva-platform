@@ -2,6 +2,7 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
+const bcrypt = require('bcryptjs');
 const pool = require('../models/db');
 const authMiddleware = require('../middleware/auth');
 const isAdmin = require('../middleware/isAdmin');
@@ -75,13 +76,117 @@ router.get('/users', async (req, res) => {
   } catch { res.status(500).json({ error: 'Error del servidor' }); }
 });
 
-// Activar/desactivar usuario
-router.patch('/users/:id/toggle', async (req, res) => {
+// Crear usuario
+router.post('/users', async (req, res) => {
+  const { name, email, password, role = 'employee', department, is_active = true } = req.body;
+  const allowedRoles = new Set(['admin', 'employee']);
+
+  if (!name || !email || !password) {
+    return res.status(400).json({ error: 'Nombre, correo y contraseña son obligatorios' });
+  }
+
+  if (!allowedRoles.has(role)) {
+    return res.status(400).json({ error: 'Rol inválido' });
+  }
+
+  try {
+    const hash = await bcrypt.hash(password, 10);
+    const { rows } = await pool.query(
+      `INSERT INTO users (name,email,password_hash,role,department,is_active)
+       VALUES($1,$2,$3,$4,$5,$6)
+       RETURNING id,name,email,role,department,is_active,created_at`,
+      [name.trim(), email.trim().toLowerCase(), hash, role, department || null, Boolean(is_active)]
+    );
+
+    return res.status(201).json(rows[0]);
+  } catch (error) {
+    if (error.code === '23505') {
+      return res.status(409).json({ error: 'El correo ya está registrado' });
+    }
+    return res.status(500).json({ error: 'Error del servidor' });
+  }
+});
+
+// Editar usuario (sin contraseña)
+router.put('/users/:id', async (req, res) => {
+  const { id } = req.params;
+  const { name, email, role, department, is_active } = req.body;
+  const allowedRoles = new Set(['admin', 'employee']);
+
+  if (!name || !email || !role) {
+    return res.status(400).json({ error: 'Nombre, correo y rol son obligatorios' });
+  }
+
+  if (!allowedRoles.has(role)) {
+    return res.status(400).json({ error: 'Rol inválido' });
+  }
+
   try {
     const { rows } = await pool.query(
-      'UPDATE users SET is_active=NOT is_active WHERE id=$1 RETURNING id,name,is_active',
-      [req.params.id]
+      `UPDATE users
+       SET name=$1, email=$2, role=$3, department=$4, is_active=$5
+       WHERE id=$6
+       RETURNING id,name,email,role,department,is_active,created_at`,
+      [name.trim(), email.trim().toLowerCase(), role, department || null, Boolean(is_active), id]
     );
+
+    if (!rows.length) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    return res.json(rows[0]);
+  } catch (error) {
+    if (error.code === '23505') {
+      return res.status(409).json({ error: 'El correo ya está registrado' });
+    }
+    return res.status(500).json({ error: 'Error del servidor' });
+  }
+});
+
+// Cambiar contraseña (sin exponer password_hash)
+router.patch('/users/:id/password', async (req, res) => {
+  const { id } = req.params;
+  const { password } = req.body;
+
+  if (!password || password.length < 6) {
+    return res.status(400).json({ error: 'La nueva contraseña debe tener al menos 6 caracteres' });
+  }
+
+  try {
+    const hash = await bcrypt.hash(password, 10);
+    const { rows } = await pool.query(
+      'UPDATE users SET password_hash=$1 WHERE id=$2 RETURNING id,name,email,role,is_active,created_at',
+      [hash, id]
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    return res.json({ message: 'Contraseña actualizada correctamente.', user: rows[0] });
+  } catch {
+    return res.status(500).json({ error: 'Error del servidor' });
+  }
+});
+
+// Activar/desactivar usuario
+router.patch('/users/:id/status', async (req, res) => {
+  const { is_active } = req.body;
+
+  if (typeof is_active !== 'boolean') {
+    return res.status(400).json({ error: 'El campo is_active debe ser booleano' });
+  }
+
+  try {
+    const { rows } = await pool.query(
+      'UPDATE users SET is_active=$1 WHERE id=$2 RETURNING id,name,email,role,department,is_active,created_at',
+      [is_active, req.params.id]
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
     res.json(rows[0]);
   } catch { res.status(500).json({ error: 'Error del servidor' }); }
 });
